@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>InkLock</title>
+  <title>AI Handwriting Analyzer</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.14.0/dist/tf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
@@ -178,7 +178,15 @@
     <p>Copyright © Manik Roy 2025</p>
   </footer>
 
-<div style="margin-top: 20px;">
+ style="margin-top: 20px;">
+  <h2>📸 Capture Handwriting via Camera</h2>
+  <button onclick="startCamera()">▶️ Start Camera</button>
+  <video id="video" width="100%" autoplay playsinline muted style="max-height: 240px; border: 2px solid #ccc; border-radius: 8px;"></video>
+  <br>
+  <button onclick="capturePhoto()">📸 Capture</button>
+  <canvas id="photoCanvas" style="display: none;"></canvas>
+</div>
+
   <h2>📸 Capture Handwriting via Camera</h2>
   <video id="video" width="100%" autoplay playsinline style="max-height: 240px; border: 2px solid #ccc; border-radius: 8px;"></video>
   <br>
@@ -188,21 +196,34 @@
 
 </body>
 
-<script>
-  const video = document.getElementById('video');
-  const photoCanvas = document.getElementById('photoCanvas');
-  const ctx = photoCanvas.getContext('2d');
 
-  navigator.mediaDevices.getUserMedia({ video: true })
-    .then(stream => { video.srcObject = stream; })
-    .catch(err => { console.error('Camera error:', err); });
+<script>
+  let videoStream;
+
+  function startCamera() {
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        videoStream = stream;
+        const video = document.getElementById('video');
+        video.srcObject = stream;
+      })
+      .catch(err => {
+        alert('Error accessing camera: ' + err.message);
+        console.error('Camera error:', err);
+      });
+  }
 
   function capturePhoto() {
+    const video = document.getElementById('video');
+    const photoCanvas = document.getElementById('photoCanvas');
+    const ctx = photoCanvas.getContext('2d');
+
     photoCanvas.width = video.videoWidth;
     photoCanvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0);
+
     const imgDataUrl = photoCanvas.toDataURL("image/png");
-    loadImageFromDataURL(imgDataUrl); // Existing image loader function
+    loadImageFromDataURL(imgDataUrl); // Existing image loader
   }
 </script>
 
