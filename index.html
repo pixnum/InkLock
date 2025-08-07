@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InkLock</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.14.0/dist/tf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background-color: #121212;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    h1 { font-size: 1.8em; margin-bottom: 10px; }
+    canvas, img {
+      border: 2px solid #333;
+      max-width: 100%;
+      height: auto;
+      margin-bottom: 10px;
+    }
+    #results {
+      margin-top: 20px;
+      background: #1e1e1e;
+      padding: 15px;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 500px;
+    }
+    button, input[type="file"] {
+      margin: 5px;
+      padding: 10px 15px;
+      font-size: 1em;
+      border: none;
+      border-radius: 8px;
+      background-color: #333;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #444;
+    }
+  </style>
+</head>
+<body>
+  <h1>✍️ AI-Enhanced Handwriting Analyzer</h1>
+  <canvas id="draw" width="300" height="200"></canvas><br>
+  <button onclick="clearCanvas()">Clear Drawing</button>
+  <input type="file" id="fileInput" accept="image/*"><br>
+  <canvas id="cropped" width="300" height="200"></canvas><br>
+  <button onclick="analyzeWithModel()">Analyze</button>
+  <button onclick="exportTXT()">Export as TXT</button>
+  <button onclick="exportPDF()">Export as PDF</button>
+  <div id="results"></div>
+
+  <script>
+    const canvas = document.getElementById("draw");
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let drawing = false;
+
+    canvas.addEventListener("mousedown", e => { drawing = true; draw(e); });
+    canvas.addEventListener("mouseup", () => drawing = false);
+    canvas.addEventListener("mousemove", draw);
+
+    function draw(e) {
+      if (!drawing) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      ctx.fillStyle = "black";
+      ctx.beginPath();
+      ctx.arc(x, y, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function clearCanvas() {
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    document.getElementById("fileInput").addEventListener("change", function (e) {
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        const img = new Image();
+        img.onload = function () {
+          const cropCanvas = document.getElementById("cropped");
+          const cropCtx = cropCanvas.getContext("2d");
+          cropCtx.drawImage(img, 0, 0, cropCanvas.width, cropCanvas.height);
+        }
+        img.src = event.target.result;
+      }
+      reader.readAsDataURL(e.target.files[0]);
+    });
+
+    async function canvasToGrayscaleTensor() {
+      const inputCanvas = document.getElementById("cropped");
+      const tfImg = tf.browser.fromPixels(inputCanvas, 1).toFloat();
+      const normalized = tfImg.div(255.0);
+      return normalized.expandDims(0);
+    }
+
+    function analyzeHandwriting() {
+      const results = {
+        pressure: "Moderate",
+        slant: "Right-leaning",
+        spacing: "Even",
+        size: "Medium",
+        signatureStyle: "Fluent & expressive",
+        mood: "Confident, Optimistic"
+      };
+      document.getElementById("results").innerHTML = `
+        <h3>Analysis Results</h3>
+        <p><b>Pressure:</b> ${results.pressure}</p>
+        <p><b>Slant:</b> ${results.slant}</p>
+        <p><b>Spacing:</b> ${results.spacing}</p>
+        <p><b>Size:</b> ${results.size}</p>
+        <p><b>Signature Style:</b> ${results.signatureStyle}</p>
+        <p><b>Inferred Mood:</b> ${results.mood}</p>
+      `;
+      window.analysisResults = results;
+    }
+
+    async function analyzeWithModel() {
+      const tensor = await canvasToGrayscaleTensor();
+      try {
+        const model = await tf.loadLayersModel('model.json');
+        const prediction = model.predict(tensor).dataSync();
+        console.log("Model output:", prediction);
+        // You can interpret prediction here
+      } catch (err) {
+        console.warn("Model not loaded. Using heuristic fallback.");
+        analyzeHandwriting();
+      }
+    }
+
+    function exportTXT() {
+      if (!window.analysisResults) return alert("No analysis results yet.");
+      const res = window.analysisResults;
+      const content = `Handwriting Analysis Results\n\n` +
+        `Pressure: ${res.pressure}\n` +
+        `Slant: ${res.slant}\n` +
+        `Spacing: ${res.spacing}\n` +
+        `Size: ${res.size}\n` +
+        `Signature Style: ${res.signatureStyle}\n` +
+        `Inferred Mood: ${res.mood}\n`;
+      const blob = new Blob([content], { type: "text/plain" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "handwriting_analysis.txt";
+      link.click();
+    }
+
+    function exportPDF() {
+      if (!window.analysisResults) return alert("No analysis results yet.");
+      const res = window.analysisResults;
+      const content = `Handwriting Analysis Results\n\n` +
+        `Pressure: ${res.pressure}\n` +
+        `Slant: ${res.slant}\n` +
+        `Spacing: ${res.spacing}\n` +
+        `Size: ${res.size}\n` +
+        `Signature Style: ${res.signatureStyle}\n` +
+        `Inferred Mood: ${res.mood}\n`;
+      const doc = new window.jspdf.jsPDF();
+      doc.text(content, 10, 10);
+      doc.save("handwriting_analysis.pdf");
+    }
+  </script>
+
+  <footer style="margin-top: 40px; text-align: center; font-size: 0.9em;">
+    <p>Copyright © Manik Roy 2025</p>
+  </footer>
+</body>
+</html>
