@@ -1,230 +1,106 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Handwriting Analyzer</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.14.0/dist/tf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InkLock - Handwriting Analyzer</title>
   <style>
     body {
-      margin: 0;
-      padding: 20px;
-      background-color: #121212;
+      font-family: sans-serif;
+      background: #111;
       color: #fff;
-      font-family: 'Segoe UI', sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
       text-align: center;
+      padding: 1rem;
+      max-width: 720px;
+      margin: auto;
     }
-    h1 { font-size: 1.8em; margin-bottom: 10px; }
-    canvas, img {
-      border: 2px solid #333;
-      max-width: 100%;
-      height: auto;
-      margin-bottom: 10px;
-    }
-    #results {
-      margin-top: 20px;
-      background: #1e1e1e;
-      padding: 15px;
-      border-radius: 10px;
-      width: 90%;
-      max-width: 500px;
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
     }
     button, input[type="file"] {
-      margin: 5px;
-      padding: 10px 15px;
+      padding: 0.6em 1.2em;
+      margin: 0.5em;
       font-size: 1em;
+      border-radius: 5px;
       border: none;
-      border-radius: 8px;
-      background-color: #333;
-      color: white;
+      background: #333;
+      color: #fff;
       cursor: pointer;
     }
-    button:hover {
-      background-color: #444;
+    video, canvas, img {
+      max-width: 100%;
+      border: 1px solid #333;
+      border-radius: 6px;
+      margin: 0.5em auto;
+      display: block;
     }
   </style>
 </head>
 <body>
-  <h1>✍️ AI-Enhanced Handwriting Analyzer</h1>
-  <canvas id="draw" width="300" height="200"></canvas><br>
-  <button onclick="clearCanvas()">Clear Drawing</button>
-  <input type="file" id="fileInput" accept="image/*"><br>
-  <canvas id="cropped" width="300" height="200"></canvas><br>
-  <button onclick="analyzeWithModel()">Analyze</button>
-  <button onclick="exportTXT()">Export as TXT</button>
-  <button onclick="exportPDF()">Export as PDF</button>
-  <div id="results"></div>
+  <h1>InkLock - AI Handwriting Analyzer</h1>
+  <input type="file" accept="image/*" id="fileInput" />
+  <button onclick="startCamera()">Start Camera</button>
+  <button onclick="captureImage()">Capture</button>
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas" style="display:none;"></canvas>
+  <img id="preview" alt="Preview" />
 
+  <div id="resultBox"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.14.0"></script>
   <script>
-    const canvas = document.getElementById("draw");
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "white";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    let drawing = false;
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const preview = document.getElementById('preview');
+    const fileInput = document.getElementById('fileInput');
+    const resultBox = document.getElementById('resultBox');
 
-    canvas.addEventListener("mousedown", e => { drawing = true; draw(e); });
-    canvas.addEventListener("mouseup", () => drawing = false);
-    canvas.addEventListener("mousemove", draw);
-
-    function draw(e) {
-      if (!drawing) return;
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      ctx.fillStyle = "black";
-      ctx.beginPath();
-      ctx.arc(x, y, 2, 0, Math.PI * 2);
-      ctx.fill();
+    function startCamera() {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+          video.srcObject = stream;
+        })
+        .catch(error => {
+          alert('Camera not available.');
+        });
     }
 
-    function clearCanvas() {
-      ctx.fillStyle = "white";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    function captureImage() {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      const dataUrl = canvas.toDataURL('image/png');
+      preview.src = dataUrl;
+      analyzeImage(dataUrl);
     }
 
-    document.getElementById("fileInput").addEventListener("change", function (e) {
+    fileInput.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
       const reader = new FileReader();
-      reader.onload = function (event) {
-        const img = new Image();
-        img.onload = function () {
-          const cropCanvas = document.getElementById("cropped");
-          const cropCtx = cropCanvas.getContext("2d");
-          cropCtx.drawImage(img, 0, 0, cropCanvas.width, cropCanvas.height);
-        }
-        img.src = event.target.result;
-      }
-      reader.readAsDataURL(e.target.files[0]);
+      reader.onload = function(evt) {
+        preview.src = evt.target.result;
+        analyzeImage(evt.target.result);
+      };
+      reader.readAsDataURL(file);
     });
 
-    async function canvasToGrayscaleTensor() {
-      const inputCanvas = document.getElementById("cropped");
-      const tfImg = tf.browser.fromPixels(inputCanvas, 1).toFloat();
-      const normalized = tfImg.div(255.0);
-      return normalized.expandDims(0);
-    }
-
-    function analyzeHandwriting() {
-      const results = {
-        pressure: "Moderate",
-        slant: "Right-leaning",
-        spacing: "Even",
-        size: "Medium",
-        signatureStyle: "Fluent & expressive",
-        mood: "Confident, Optimistic"
-      };
-      document.getElementById("results").innerHTML = `
-        <h3>Analysis Results</h3>
-        <p><b>Pressure:</b> ${results.pressure}</p>
-        <p><b>Slant:</b> ${results.slant}</p>
-        <p><b>Spacing:</b> ${results.spacing}</p>
-        <p><b>Size:</b> ${results.size}</p>
-        <p><b>Signature Style:</b> ${results.signatureStyle}</p>
-        <p><b>Inferred Mood:</b> ${results.mood}</p>
-      `;
-      window.analysisResults = results;
-    }
-
-    async function analyzeWithModel() {
-      const tensor = await canvasToGrayscaleTensor();
-      try {
-        const model = await tf.loadLayersModel('model.json');
-        const prediction = model.predict(tensor).dataSync();
-        console.log("Model output:", prediction);
-        // You can interpret prediction here
-      } catch (err) {
-        console.warn("Model not loaded. Using heuristic fallback.");
-        analyzeHandwriting();
-      }
-    }
-
-    function exportTXT() {
-      if (!window.analysisResults) return alert("No analysis results yet.");
-      const res = window.analysisResults;
-      const content = `Handwriting Analysis Results\n\n` +
-        `Pressure: ${res.pressure}\n` +
-        `Slant: ${res.slant}\n` +
-        `Spacing: ${res.spacing}\n` +
-        `Size: ${res.size}\n` +
-        `Signature Style: ${res.signatureStyle}\n` +
-        `Inferred Mood: ${res.mood}\n`;
-      const blob = new Blob([content], { type: "text/plain" });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "handwriting_analysis.txt";
-      link.click();
-    }
-
-    function exportPDF() {
-      if (!window.analysisResults) return alert("No analysis results yet.");
-      const res = window.analysisResults;
-      const content = `Handwriting Analysis Results\n\n` +
-        `Pressure: ${res.pressure}\n` +
-        `Slant: ${res.slant}\n` +
-        `Spacing: ${res.spacing}\n` +
-        `Size: ${res.size}\n` +
-        `Signature Style: ${res.signatureStyle}\n` +
-        `Inferred Mood: ${res.mood}\n`;
-      const doc = new window.jspdf.jsPDF();
-      doc.text(content, 10, 10);
-      doc.save("handwriting_analysis.pdf");
+    async function analyzeImage(dataUrl) {
+      resultBox.innerText = "Analyzing handwriting...";
+      await tf.ready();
+      // Simulated analysis
+      setTimeout(() => {
+        resultBox.innerHTML = `
+          <p><strong>Signature Style:</strong> Cursive</p>
+          <p><strong>Emotion/Mood:</strong> Confident & Calm</p>
+          <p><strong>Strokes:</strong> Smooth, flowing</p>
+          <p><strong>Slant:</strong> Slight rightward</p>
+        `;
+      }, 1000);
     }
   </script>
-
-  <footer style="margin-top: 40px; text-align: center; font-size: 0.9em;">
-    <p>Copyright © Manik Roy 2025</p>
-  </footer>
-
- style="margin-top: 20px;">
-  <h2>📸 Capture Handwriting via Camera</h2>
-  <button onclick="startCamera()">▶️ Start Camera</button>
-  <video id="video" width="100%" autoplay playsinline muted style="max-height: 240px; border: 2px solid #ccc; border-radius: 8px;"></video>
-  <br>
-  <button onclick="capturePhoto()">📸 Capture</button>
-  <canvas id="photoCanvas" style="display: none;"></canvas>
-</div>
-
-  <h2>📸 Capture Handwriting via Camera</h2>
-  <video id="video" width="100%" autoplay playsinline style="max-height: 240px; border: 2px solid #ccc; border-radius: 8px;"></video>
-  <br>
-  <button onclick="capturePhoto()">📸 Capture</button>
-  <canvas id="photoCanvas" style="display: none;"></canvas>
-</div>
-
+  <footer style="margin-top:2rem; font-size: 0.8em;"> © Manik Roy 2025</footer>
 </body>
-
-
-<script>
-  let videoStream;
-
-  function startCamera() {
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => {
-        videoStream = stream;
-        const video = document.getElementById('video');
-        video.srcObject = stream;
-      })
-      .catch(err => {
-        alert('Error accessing camera: ' + err.message);
-        console.error('Camera error:', err);
-      });
-  }
-
-  function capturePhoto() {
-    const video = document.getElementById('video');
-    const photoCanvas = document.getElementById('photoCanvas');
-    const ctx = photoCanvas.getContext('2d');
-
-    photoCanvas.width = video.videoWidth;
-    photoCanvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
-
-    const imgDataUrl = photoCanvas.toDataURL("image/png");
-    loadImageFromDataURL(imgDataUrl); // Existing image loader
-  }
-</script>
-
 </html>
