@@ -177,5 +177,33 @@
   <footer style="margin-top: 40px; text-align: center; font-size: 0.9em;">
     <p>Copyright © Manik Roy 2025</p>
   </footer>
+
+<div style="margin-top: 20px;">
+  <h2>📸 Capture Handwriting via Camera</h2>
+  <video id="video" width="100%" autoplay playsinline style="max-height: 240px; border: 2px solid #ccc; border-radius: 8px;"></video>
+  <br>
+  <button onclick="capturePhoto()">📸 Capture</button>
+  <canvas id="photoCanvas" style="display: none;"></canvas>
+</div>
+
 </body>
+
+<script>
+  const video = document.getElementById('video');
+  const photoCanvas = document.getElementById('photoCanvas');
+  const ctx = photoCanvas.getContext('2d');
+
+  navigator.mediaDevices.getUserMedia({ video: true })
+    .then(stream => { video.srcObject = stream; })
+    .catch(err => { console.error('Camera error:', err); });
+
+  function capturePhoto() {
+    photoCanvas.width = video.videoWidth;
+    photoCanvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+    const imgDataUrl = photoCanvas.toDataURL("image/png");
+    loadImageFromDataURL(imgDataUrl); // Existing image loader function
+  }
+</script>
+
 </html>
