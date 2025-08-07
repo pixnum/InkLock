@@ -57,18 +57,27 @@
     const fileInput = document.getElementById('fileInput');
     const resultBox = document.getElementById('resultBox');
 
-   function startCamera() {
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: 'environment' } } })
+  <script>
+function startCamera() {
+  const constraints = {
+    video: {
+      facingMode: { ideal: "environment" } // More compatible than 'exact'
+    }
+  };
+
+  navigator.mediaDevices.getUserMedia(constraints)
     .then(stream => {
       video.srcObject = stream;
     })
     .catch(error => {
-      alert('Rear camera not available. Using default.');
+      alert("Rear camera not available. Switching to default camera.");
       navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
         video.srcObject = stream;
       });
     });
 }
+</script>
+
 
 
     function captureImage() {
